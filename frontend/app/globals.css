@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@layer base {
+	html,
+	body {
+		height: 100%;
+		background: var(--bereal-bg);
+		color: var(--bereal-text-primary);
+	}
+
+	:root {
+		--bereal-bg: #0b0f14;
+		--bereal-surface: #111827;
+		--bereal-surface-hover: #1b2433;
+		--bereal-border: #243244;
+		--bereal-text-primary: #f8fafc;
+		--bereal-text-secondary: #c7d2e0;
+		--bereal-text-muted: #94a3b8;
+		--bereal-primary: #22c55e;
+		--bereal-primary-dark: #16a34a;
+		--bereal-secondary: #38bdf8;
+		--bereal-accent: #38bdf8;
+		--bereal-accent-dark: #0ea5e9;
+		--bereal-success: #10b981;
+		--bereal-success-dark: #059669;
+		--bereal-warning: #f59e0b;
+		--bereal-warning-soft: #fde68a;
+		--bereal-warning-text: #78350f;
+		--bereal-danger: #ef4444;
+		--bereal-danger-dark: #dc2626;
+	}
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@media (max-width: 1023px) {
+	body > * {
+		display: none !important;
+	}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+	body::before {
+		content: "This app is optimized for desktop. Please use a larger screen.";
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 100vh;
+		padding: 24px;
+		text-align: center;
+		color: var(--bereal-text-primary);
+		background: var(--bereal-bg);
+		font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+			"Segoe UI", sans-serif;
+		font-size: 16px;
+	}
 }

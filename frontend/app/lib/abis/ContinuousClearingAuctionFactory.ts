@@ -66,4 +66,11 @@ export const ContinuousClearingAuctionFactory_ABI = [
     name: "InvalidTokenAmount",
     inputs: [{ name: "amount", type: "uint256", internalType: "uint256" }],
   },
+  {
+    type: "function",
+    name: "onTokensReceived",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
 ];

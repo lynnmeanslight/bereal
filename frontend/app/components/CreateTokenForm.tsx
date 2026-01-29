@@ -11,6 +11,7 @@ import { formatCompact } from "../lib/format";
 type Props = {
   address?: string;
   chainId?: number;
+  onSuccess?: (tokenAddress: string) => void;
 };
 
 type SubmitState = {
@@ -25,17 +26,17 @@ const defaultForm = {
   name: "My Super Token",
   symbol: "MSUP",
   decimals: "18",
-  totalSupply: "1000000000000000000000000000", // 1,000,000,000 tokens @18 decimals
+  humanSupply: "1,000,000,000", // human-readable total supply
   recipient: "",
   creator: "",
   homeChainId: "",
   description: "A programmable super UERC20 token",
-  website: "https://en.wikipedia.org/wiki/Myanmar",
-  image: "https://asiantrails.b-cdn.net/wp-content/uploads/2020/06/bagan-zone-temple-view.jpg",
+  website: "https://example.com",
+  image: "https://example.com/logo.png",
   salt: "0x0000000000000000000000000000000000000000000000000000000000000000",
 };
 
-export function CreateTokenForm({ address, chainId }: Props) {
+export function CreateTokenForm({ address, chainId, onSuccess }: Props) {
   const [form, setForm] = useState(defaultForm);
   const [state, setState] = useState<SubmitState>({ submitting: false });
 
@@ -76,7 +77,8 @@ export function CreateTokenForm({ address, chainId }: Props) {
         throw new Error("Decimals must be between 0 and 255");
       }
 
-      const totalSupply = BigInt(form.totalSupply);
+      const cleanedHuman = (form.humanSupply || "0").replace(/,/g, "").trim();
+      const totalSupply = ethers.parseUnits(cleanedHuman || "0", decimalsNum);
       const homeChainId = BigInt(form.homeChainId || chainId || 0);
       const creator = form.creator || address;
       const salt = form.salt && form.salt.trim() !== "" ? form.salt : ethers.ZeroHash;
@@ -123,46 +125,66 @@ export function CreateTokenForm({ address, chainId }: Props) {
         txHash: receipt?.hash,
         predictedAddress,
       });
+      
+      // Call onSuccess callback with the predicted token address
+      if (onSuccess && predictedAddress) {
+        onSuccess(predictedAddress);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create token";
       setState({ submitting: false, error: message });
     }
   };
 
+  // Preview computed total supply for UX.
+  let supplyPreview: { raw?: bigint; compact?: string; error?: string } = {};
+  const decimalsNum = Number(form.decimals);
+  if (Number.isFinite(decimalsNum) && decimalsNum >= 0 && decimalsNum <= 255) {
+    try {
+      const cleanedHuman = (form.humanSupply || "0").replace(/,/g, "").trim();
+      const raw = ethers.parseUnits(cleanedHuman || "0", decimalsNum);
+      supplyPreview = { raw, compact: formatCompact(raw.toString()) };
+    } catch (err) {
+      supplyPreview = { error: "Invalid supply for given decimals" };
+    }
+  } else {
+    supplyPreview = { error: "Decimals must be 0-255" };
+  }
+
   return (
-    <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="rounded-xl border border-[color:var(--bereal-border)] bg-[color:var(--bereal-surface)] p-4 text-[color:var(--bereal-text-primary)]">
       <div className="flex items-start justify-between">
         <div>
-          <p className="mb-1 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+          <p className="mb-1 text-sm font-semibold text-[color:var(--bereal-text-primary)]">
             Create UERC20 Token
           </p>
-          <p className="text-xs text-zinc-500">
-            Deploy a Super UERC20 via the factory. Values are raw units (wei) and should include decimals.
+          <p className="text-xs text-[color:var(--bereal-text-secondary)]">
+            Deploy a Super UERC20 via the factory. Enter human-readable amounts; we convert to on-chain units.
           </p>
         </div>
-        <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-200">
+        <span className="rounded-full bg-[color:var(--bereal-surface-hover)] px-2 py-1 text-[11px] font-medium text-[color:var(--bereal-success)]">
           Requires connected wallet
         </span>
       </div>
 
       <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Factory address</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Factory address</span>
             <input
               value={form.factoryAddress}
               onChange={(e) => updateField("factoryAddress", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="Factory contract address"
               required
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Salt (bytes32)</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Salt (bytes32)</span>
             <input
               value={form.salt}
               onChange={(e) => updateField("salt", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="Randomize for unique address"
               required
             />
@@ -170,22 +192,22 @@ export function CreateTokenForm({ address, chainId }: Props) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Name</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Name</span>
             <input
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="e.g. My Super Token"
               required
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Symbol</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Symbol</span>
             <input
               value={form.symbol}
               onChange={(e) => updateField("symbol", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="e.g. MSUP"
               required
             />
@@ -193,32 +215,32 @@ export function CreateTokenForm({ address, chainId }: Props) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Decimals</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Decimals</span>
             <input
               value={form.decimals}
               onChange={(e) => updateField("decimals", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="18"
               required
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Total supply (raw)</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Total supply (human)</span>
             <input
-              value={form.totalSupply}
-              onChange={(e) => updateField("totalSupply", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-              placeholder="e.g. 1000000000000000000000000"
+              value={form.humanSupply}
+              onChange={(e) => updateField("humanSupply", e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
+              placeholder="e.g. 1,000,000,000"
               required
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Home chain ID</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Home chain ID</span>
             <input
               value={form.homeChainId || (chainId ? String(chainId) : "")}
               onChange={(e) => updateField("homeChainId", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="Defaults to connected chain"
               required
             />
@@ -226,22 +248,22 @@ export function CreateTokenForm({ address, chainId }: Props) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Recipient</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Recipient</span>
             <input
               value={form.recipient || address || ""}
               onChange={(e) => updateField("recipient", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="Defaults to your address"
               required
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Creator</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Creator</span>
             <input
               value={form.creator || address || ""}
               onChange={(e) => updateField("creator", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="Defaults to your address"
               required
             />
@@ -249,36 +271,36 @@ export function CreateTokenForm({ address, chainId }: Props) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Description</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Description</span>
             <input
               value={form.description}
               onChange={(e) => updateField("description", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="Short description"
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Website</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Website</span>
             <input
               value={form.website}
               onChange={(e) => updateField("website", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="https://example.com"
             />
           </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="mb-1 block text-xs font-medium text-zinc-500">Image URL</span>
+          <label className="text-sm text-[color:var(--bereal-text-secondary)]">
+            <span className="mb-1 block text-xs font-medium text-[color:var(--bereal-text-secondary)]">Image URL</span>
             <input
               value={form.image}
               onChange={(e) => updateField("image", e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-lg border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] px-3 py-2 text-sm text-[color:var(--bereal-text-primary)] outline-none focus:ring-2 focus:ring-[color:var(--bereal-primary)]"
               placeholder="https://example.com/logo.png"
             />
           </label>
         </div>
 
-        <div className="rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
+        <div className="rounded-lg bg-[color:var(--bereal-bg)] p-3 text-xs text-[color:var(--bereal-text-secondary)]">
           <div className="flex justify-between">
             <span>Connected</span>
             <span>{address ?? "Not connected"}</span>
@@ -287,36 +309,52 @@ export function CreateTokenForm({ address, chainId }: Props) {
             <span>Chain ID</span>
             <span>{chainId ?? "?"}</span>
           </div>
-          {form.totalSupply ? (
+          <div className="mt-2 rounded border border-[color:var(--bereal-border)] bg-[color:var(--bereal-surface)] p-2">
             <div className="flex justify-between">
-              <span>Total supply (compact)</span>
-              <span>{formatCompact(form.totalSupply)}</span>
+              <span>Supply preview</span>
+              <span className="font-mono text-[11px] text-[color:var(--bereal-text-secondary)]">
+                {form.humanSupply || "0"} @ {form.decimals} decimals
+              </span>
             </div>
-          ) : null}
+            {supplyPreview.error ? (
+              <div className="text-xs text-[color:var(--bereal-danger)]">{supplyPreview.error}</div>
+            ) : supplyPreview.raw !== undefined ? (
+              <div className="text-xs text-[color:var(--bereal-text-secondary)]">
+                Compact: <span className="text-[color:var(--bereal-success)]">{supplyPreview.compact}</span>
+                <div className="font-mono text-[11px] text-[color:var(--bereal-text-muted)] break-all">
+                  Raw: {supplyPreview.raw.toString()}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-3">
           <button
             type="submit"
             disabled={state.submitting || !address}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-lg bg-[color:var(--bereal-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[color:var(--bereal-primary-dark)] disabled:opacity-50"
           >
             {state.submitting ? "Creating..." : "Create Token"}
           </button>
           {state.error ? (
-            <p className="text-sm text-red-500">{state.error}</p>
+            <p className="text-sm text-[color:var(--bereal-danger)]">{state.error}</p>
           ) : null}
         </div>
 
         {state.predictedAddress ? (
-          <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
-            <div>Predicted token address: {state.predictedAddress}</div>
+          <div className="rounded-lg border border-[color:var(--bereal-accent)] bg-[color:var(--bereal-surface)] p-3 text-xs text-[color:var(--bereal-text-secondary)]">
+            <div>
+              Predicted token address: <span className="font-mono text-[color:var(--bereal-text-primary)]">{state.predictedAddress}</span>
+            </div>
           </div>
         ) : null}
 
         {state.txHash ? (
-          <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100">
-            <div>Tx hash: {state.txHash}</div>
+          <div className="rounded-lg border border-[color:var(--bereal-success)] bg-[color:var(--bereal-surface)] p-3 text-xs text-[color:var(--bereal-text-secondary)]">
+            <div>
+              Tx hash: <span className="font-mono text-[color:var(--bereal-text-primary)]">{state.txHash}</span>
+            </div>
           </div>
         ) : null}
       </form>

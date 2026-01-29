@@ -28,7 +28,7 @@ export function useTokenBalance(address?: string, tokenAddress?: string) {
 
       try {
         setState({ status: "loading" });
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
+        const provider = new ethers.JsonRpcProvider("https://sepolia.unichain.org");
         const erc20Abi = [
           "function balanceOf(address) view returns (uint256)",
           "function decimals() view returns (uint8)",

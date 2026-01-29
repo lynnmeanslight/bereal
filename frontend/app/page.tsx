@@ -4,23 +4,28 @@ import { ISuccessResult } from "@worldcoin/idkit";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount, useChainId, useConnect, useDisconnect } from "wagmi";
-import { WalletStatus } from "./components/WalletStatus";
-import { WalletMeta } from "./components/WalletMeta";
-import { WorldIDSection } from "./components/WorldIDSection";
-import { InitializeDistributionForm } from "./components/InitializeDistributionForm";
-import { CreateTokenForm } from "./components/CreateTokenForm";
+import { ethers } from "ethers";
+import { LandingPage } from "./components/LandingPage";
+import { CreatorFlow } from "./components/CreatorFlow";
+import { BidderFlow } from "./components/BidderFlow";
+
+type AppView = "landing" | "creator" | "bidder";
 
 export default function Home() {
   const router = useRouter();
   const { address, connector, status } = useAccount();
   const chainId = useChainId();
-  const { connectAsync, connectors, error: connectError, isPending } =
-    useConnect();
+  const { connectAsync, connectors, isPending } = useConnect();
   const { disconnectAsync, isPending: isDisconnecting } = useDisconnect();
+  const [view, setView] = useState<AppView>("landing");
+  const [ethBalance, setEthBalance] = useState<string | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
 
   const injectedConnector =
     connectors.find((item) => item.id === "injected") ||
     connectors.find((item) => item.type === "injected");
+
 
   const [walletMeta, setWalletMeta] = useState<{
     address: string;
@@ -28,6 +33,48 @@ export default function Home() {
     connector: string;
     connectedAt: string;
   } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchBalance = async () => {
+      if (status !== "connected" || !address) {
+        setEthBalance(null);
+        setBalanceError(null);
+        setIsBalanceLoading(false);
+        return;
+      }
+
+      if (typeof window === "undefined" || !(window as any).ethereum) {
+        setBalanceError("No injected wallet found");
+        setIsBalanceLoading(false);
+        return;
+      }
+
+      try {
+        setIsBalanceLoading(true);
+        const provider = new ethers.JsonRpcProvider("https://sepolia.unichain.org");
+        const raw = await provider.getBalance(address);
+        if (cancelled) return;
+        setEthBalance(ethers.formatEther(raw));
+        setBalanceError(null);
+      } catch (error) {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Failed to fetch balance";
+        setBalanceError(message);
+      } finally {
+        if (!cancelled) setIsBalanceLoading(false);
+      }
+    };
+
+    fetchBalance();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status, address]);
+  
 
   useEffect(() => {
     const stored = localStorage.getItem("wallet-meta");
@@ -80,37 +127,69 @@ export default function Home() {
 
   const walletAddress = address ?? undefined;
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-black">
-      <div className="flex w-full max-w-xl flex-col gap-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <WalletStatus
-          status={status}
-          onConnect={handleInjectedConnect}
-          onDisconnect={handleWalletDisconnect}
-          isConnecting={isPending}
-          isDisconnecting={isDisconnecting}
-          canConnect={Boolean(injectedConnector)}
-        />
-
-        <WalletMeta meta={walletMeta} />
-
-        {connectError ? (
-          <p className="text-sm text-red-500">{connectError.message}</p>
-        ) : null}
-
-        <WorldIDSection
-          walletAddress={walletAddress}
-          onSuccess={onSuccess}
-          onVerify={handleVerify}
-        />
-
-        <InitializeDistributionForm
-          address={walletAddress}
-          chainId={chainId ?? undefined}
-        />
-
-        <CreateTokenForm address={walletAddress} chainId={chainId ?? undefined} />
+  // Wallet widget - always visible
+  const WalletWidget = () => (
+    <div className="fixed right-6 top-6 z-50">
+      <div className="rounded-xl border border-[color:var(--bereal-border)] bg-[color:var(--bereal-surface)] px-4 py-3 shadow-lg">
+        {walletAddress ? (
+          <div className="flex items-center gap-3">
+            <div className="text-sm">
+              <div className="font-medium text-[color:var(--bereal-text-primary)]">
+                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+              </div>
+              <div className="text-xs text-[color:var(--bereal-text-secondary)]">
+                Chain: {chainId ?? "?"}
+              </div>
+              <div className="mt-1 text-[11px] text-[color:var(--bereal-text-secondary)]">
+                {isBalanceLoading && "Balance: Loading..."}
+                {!isBalanceLoading && balanceError && `Balance error: ${balanceError}`}
+                {!isBalanceLoading && !balanceError && ethBalance &&
+                  `Balance: ${Number(ethBalance).toLocaleString(undefined, {
+                    maximumFractionDigits: 6,
+                  })} ETH`}
+                {!isBalanceLoading && !balanceError && !ethBalance && "Balance: --"}
+              </div>
+            </div>
+            <button
+              onClick={handleWalletDisconnect}
+              disabled={isDisconnecting}
+              className="rounded-lg bg-[color:var(--bereal-danger)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[color:var(--bereal-danger-dark)]"
+            >
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleInjectedConnect}
+            disabled={isPending}
+            className="rounded-lg bg-[color:var(--bereal-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--bereal-primary-dark)]"
+          >
+            {isPending ? "Connecting..." : "Connect Wallet"}
+          </button>
+        )}
       </div>
     </div>
+  );
+
+  return (
+    <>
+      <WalletWidget />
+      {view === "landing" && (
+        <LandingPage onSelectRole={(role) => setView(role)} />
+      )}
+      {view === "creator" && (
+        <CreatorFlow
+          address={walletAddress}
+          chainId={chainId ?? undefined}
+          onBack={() => setView("landing")}
+        />
+      )}
+      {view === "bidder" && (
+        <BidderFlow
+          address={walletAddress}
+          onBack={() => setView("landing")}
+        />
+      )}
+    </>
   );
 }

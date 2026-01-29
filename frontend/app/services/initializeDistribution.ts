@@ -41,6 +41,9 @@ export async function initializeDistribution(
     totalAuctionSupply,
     encodedParams,
     ethers.ZeroHash,
+    {
+      gasLimit: BigInt(10_000_000),
+    },
   );
 
   const receipt = await tx.wait();
@@ -48,6 +51,23 @@ export async function initializeDistribution(
   // ⚠️ Prefer decoding events if ABI exposes them
   const auctionAddress = receipt!.logs[0].address;
 
+  const erc20Abi = [
+    "function balanceOf(address) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+    "function symbol() view returns (string)",
+    "function transfer(address to, uint amount) returns (bool)",
+  ];
+
+  const auctionAbi = ["function onTokensReceived()"];
+  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+  await tokenContract.transfer(auctionAddress, totalAuctionSupply);
+
+  const auctionContract = new ethers.Contract(
+    auctionAddress,
+    auctionAbi,
+    signer,
+  );
+  await auctionContract.onTokensReceived();
   return {
     txHash: receipt!.hash,
     auctionAddress,

@@ -14,8 +14,8 @@ type Props = {
 
 export function WorldIDSection({ walletAddress, onSuccess, onVerify }: Props) {
   return (
-    <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-      <p className="mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+    <div className="rounded-xl border border-[color:var(--bereal-border)] bg-[color:var(--bereal-bg)] p-4 text-[color:var(--bereal-text-primary)]">
+      <p className="mb-2 text-sm font-semibold text-[color:var(--bereal-text-primary)]">
         World ID Verification
       </p>
       <IDKitWidget
@@ -28,7 +28,7 @@ export function WorldIDSection({ walletAddress, onSuccess, onVerify }: Props) {
       >
         {({ open }) => (
           <button
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+            className="rounded-lg bg-[color:var(--bereal-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[color:var(--bereal-primary-dark)]"
             onClick={open}
           >
             Verify with World ID

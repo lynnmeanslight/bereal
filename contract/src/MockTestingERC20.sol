@@ -12,10 +12,10 @@ contract MockTestingERC20 is SuperchainERC20 {
     }
     
     function name() public pure override returns (string memory) {
-        return "MyExampleToken";
+        return "FFL Token";
     }
  
     function symbol() public pure override returns (string memory) {
-        return "MET";
+        return "FT";
     }
 }
