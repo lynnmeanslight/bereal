@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  IDKitWidget,
+  VerificationLevel,
+  ISuccessResult,
+} from "@worldcoin/idkit";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount, useChainId, useConnect, useDisconnect } from "wagmi";
@@ -9,23 +14,24 @@ export default function Home() {
   const router = useRouter();
   const { address, connector, status } = useAccount();
   const chainId = useChainId();
-  const { connectAsync, connectors, error: connectError, isPending } =
-    useConnect();
+  const {
+    connectAsync,
+    connectors,
+    error: connectError,
+    isPending,
+  } = useConnect();
   const { disconnectAsync, isPending: isDisconnecting } = useDisconnect();
 
   const injectedConnector =
     connectors.find((item) => item.id === "injected") ||
     connectors.find((item) => item.type === "injected");
 
-  const [walletMeta, setWalletMeta] = useState<
-    | {
-        address: string;
-        chainId: number | null;
-        connector: string;
-        connectedAt: string;
-      }
-    | null
-  >(null);
+  const [walletMeta, setWalletMeta] = useState<{
+    address: string;
+    chainId: number | null;
+    connector: string;
+    connectedAt: string;
+  } | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("wallet-meta");
@@ -60,19 +66,55 @@ export default function Home() {
     localStorage.removeItem("wallet-meta");
   };
 
+  const handleVerify = async (proof: ISuccessResult) => {
+    const res = await fetch("/api/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(proof),
+    });
+
+    if (!res.ok) {
+      throw new Error("Verification failed.");
+    }
+  };
+
+  const onSuccess = () => {
+    router.push("/success"); // ✅ safe
+  };
 
   const walletAddress = address ?? undefined;
 
+  const [initForm, setInitForm] = useState({
+    tokenAddress: "",
+    totalAuctionSupply: "",
+    currency: "",
+    tokensRecipient: "",
+    fundsRecipient: "",
+    startBlock: "",
+    endBlock: "",
+    claimBlock: "",
+    tickSpacing: "1",
+    validationHook: "0x0000000000000000000000000000000000000000",
+    floorPrice: "0",
+    requiredCurrencyRaised: "0",
+    auctionStepsData: "0x",
+  });
 
-  
+  const [submitState, setSubmitState] = useState<{
+    submitting: boolean;
+    txHash?: string;
+    auctionAddress?: string;
+    error?: string;
+  }>({ submitting: false });
 
+  const updateField = (key: keyof typeof initForm, value: string) => {
+    setInitForm((prev) => ({ ...prev, [key]: value }));
+  };
 
   const parseBigInt = (label: string, value: string) => {
     if (!value) throw new Error(`${label} is required`);
     return BigInt(value);
   };
-
-  
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-black">
@@ -133,6 +175,30 @@ export default function Home() {
           <p className="text-sm text-red-500">{connectError.message}</p>
         ) : null}
 
+        <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <p className="mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+            World ID Verification
+          </p>
+          <IDKitWidget
+            app_id={process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}`}
+            action={
+              process.env.NEXT_PUBLIC_WORLD_APP_ACTION_ID as `app_${string}`
+            }
+            onSuccess={onSuccess}
+            handleVerify={handleVerify}
+            verification_level={VerificationLevel.Orb}
+            // signal={walletAddress}
+          >
+            {({ open }) => (
+              <button
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+                onClick={open}
+              >
+                Verify with World ID
+              </button>
+            )}
+          </IDKitWidget>
+        </div>
       </div>
     </div>
   );
