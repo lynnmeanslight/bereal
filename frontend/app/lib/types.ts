@@ -32,3 +32,10 @@ export type AuctionParameters = {
   /** Packed bytes describing token issuance schedule */
   auctionStepsData: `0x${string}`;
 };
+
+export type UERC20Metadata = {
+  description: string;
+  website: string;
+  image: string;
+};
+

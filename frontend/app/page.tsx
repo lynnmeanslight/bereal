@@ -8,6 +8,7 @@ import { WalletStatus } from "./components/WalletStatus";
 import { WalletMeta } from "./components/WalletMeta";
 import { WorldIDSection } from "./components/WorldIDSection";
 import { InitializeDistributionForm } from "./components/InitializeDistributionForm";
+import { CreateTokenForm } from "./components/CreateTokenForm";
 
 export default function Home() {
   const router = useRouter();
@@ -107,6 +108,8 @@ export default function Home() {
           address={walletAddress}
           chainId={chainId ?? undefined}
         />
+
+        <CreateTokenForm address={walletAddress} chainId={chainId ?? undefined} />
       </div>
     </div>
   );
