@@ -1,9 +1,9 @@
 "use client";
 
-import { ISuccessResult } from "@worldcoin/idkit";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAccount, useChainId, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { unichainSepolia } from "wagmi/chains";
 import { ethers } from "ethers";
 import { LandingPage } from "./components/LandingPage";
 import { CreatorFlow } from "./components/CreatorFlow";
@@ -11,16 +11,20 @@ import { BidderFlow } from "./components/BidderFlow";
 
 type AppView = "landing" | "creator" | "bidder";
 
+const REQUIRED_CHAIN_ID = unichainSepolia.id;
+
 export default function Home() {
   const router = useRouter();
   const { address, connector, status } = useAccount();
   const chainId = useChainId();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnectAsync, isPending: isDisconnecting } = useDisconnect();
+  const { switchChainAsync, isPending: isSwitchingChain } = useSwitchChain();
   const [view, setView] = useState<AppView>("landing");
   const [ethBalance, setEthBalance] = useState<string | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
+  const [networkError, setNetworkError] = useState<string | null>(null);
 
   const injectedConnector =
     connectors.find((item) => item.id === "injected") ||
@@ -33,6 +37,27 @@ export default function Home() {
     connector: string;
     connectedAt: string;
   } | null>(null);
+
+  // Auto-switch to Unichain Sepolia if connected to wrong network
+  useEffect(() => {
+    const switchNetwork = async () => {
+      if (status === "connected" && chainId && chainId !== REQUIRED_CHAIN_ID) {
+        try {
+          setNetworkError("Switching to Unichain Sepolia...");
+          await switchChainAsync({ chainId: REQUIRED_CHAIN_ID });
+          setNetworkError(null);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to switch network";
+          setNetworkError(`Please switch to Unichain Sepolia (Chain ID: ${REQUIRED_CHAIN_ID})`);
+          console.error("Network switch error:", message);
+        }
+      } else if (status === "connected" && chainId === REQUIRED_CHAIN_ID) {
+        setNetworkError(null);
+      }
+    };
+
+    switchNetwork();
+  }, [status, chainId, switchChainAsync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,38 +134,28 @@ export default function Home() {
     localStorage.removeItem("wallet-meta");
   };
 
-  const handleVerify = async (proof: ISuccessResult) => {
-    const res = await fetch("/api/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(proof),
-    });
-
-    if (!res.ok) {
-      throw new Error("Verification failed.");
-    }
-  };
-
-  const onSuccess = () => {
-    router.push("/success");
-  };
 
   const walletAddress = address ?? undefined;
 
   // Wallet widget - always visible
   const WalletWidget = () => (
     <div className="fixed right-6 top-6 z-50">
-      <div className="rounded-xl border border-[color:var(--bereal-border)] bg-[color:var(--bereal-surface)] px-4 py-3 shadow-lg">
+      <div className="rounded-xl border border-(--bereal-border) bg-(--bereal-surface) px-4 py-3 shadow-lg">
         {walletAddress ? (
           <div className="flex items-center gap-3">
             <div className="text-sm">
-              <div className="font-medium text-[color:var(--bereal-text-primary)]">
+              <div className="font-medium text-(--bereal-text-primary)">
                 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
               </div>
-              <div className="text-xs text-[color:var(--bereal-text-secondary)]">
-                Chain: {chainId ?? "?"}
+              <div className={`text-xs ${chainId === REQUIRED_CHAIN_ID ? "text-(--bereal-success)" : "text-(--bereal-danger)"}`}>
+                Chain: {chainId ?? "?"} {chainId === REQUIRED_CHAIN_ID ? "✓" : "⚠️"}
               </div>
-              <div className="mt-1 text-[11px] text-[color:var(--bereal-text-secondary)]">
+              {networkError && (
+                <div className="mt-1 text-[11px] text-(--bereal-danger)">
+                  {networkError}
+                </div>
+              )}
+              <div className="mt-1 text-[11px] text-(--bereal-text-secondary)">
                 {isBalanceLoading && "Balance: Loading..."}
                 {!isBalanceLoading && balanceError && `Balance error: ${balanceError}`}
                 {!isBalanceLoading && !balanceError && ethBalance &&
@@ -153,7 +168,7 @@ export default function Home() {
             <button
               onClick={handleWalletDisconnect}
               disabled={isDisconnecting}
-              className="rounded-lg bg-[color:var(--bereal-danger)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[color:var(--bereal-danger-dark)]"
+              className="rounded-lg bg-(--bereal-danger) px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-(--bereal-danger-dark)"
             >
               Disconnect
             </button>
@@ -162,7 +177,7 @@ export default function Home() {
           <button
             onClick={handleInjectedConnect}
             disabled={isPending}
-            className="rounded-lg bg-[color:var(--bereal-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--bereal-primary-dark)]"
+            className="rounded-lg bg-(--bereal-primary) px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-(--bereal-primary-dark)"
           >
             {isPending ? "Connecting..." : "Connect Wallet"}
           </button>
@@ -174,6 +189,37 @@ export default function Home() {
   return (
     <>
       <WalletWidget />
+      
+      {/* Wrong network blocking overlay */}
+      {status === "connected" && chainId && chainId !== REQUIRED_CHAIN_ID && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 max-w-md rounded-2xl border border-(--bereal-border) bg-(--bereal-surface) p-8 text-center shadow-2xl">
+            <div className="mb-4 text-6xl">⚠️</div>
+            <h2 className="mb-2 text-2xl font-bold text-(--bereal-text-primary)">
+              Wrong Network
+            </h2>
+            <p className="mb-4 text-(--bereal-text-secondary)">
+              This app only works on <span className="font-semibold text-(--bereal-accent)">Unichain Sepolia</span>.
+            </p>
+            <p className="mb-6 text-sm text-(--bereal-text-muted)">
+              Chain ID: {REQUIRED_CHAIN_ID}
+            </p>
+            {isSwitchingChain ? (
+              <div className="rounded-lg bg-(--bereal-bg) py-3 text-(--bereal-text-secondary)">
+                Switching network...
+              </div>
+            ) : (
+              <button
+                onClick={() => switchChainAsync({ chainId: REQUIRED_CHAIN_ID })}
+                className="w-full rounded-lg bg-(--bereal-primary) px-6 py-3 font-semibold text-white transition-colors hover:bg-(--bereal-primary-dark)"
+              >
+                Switch to Unichain Sepolia
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {view === "landing" && (
         <LandingPage onSelectRole={(role) => setView(role)} />
       )}

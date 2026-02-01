@@ -1,14 +1,23 @@
 import { ethers } from "ethers";
-import { ContinuousClearingAuctionFactory_ABI } from "../lib/abis/ContinuousClearingAuctionFactory";
 import { AuctionParameters } from "../lib/types";
-import { CCA_FACTORY_ADDRESS } from "../lib/constants";
+import { BE_REAL_REGISTRY_ADDRESS } from "../lib/constants";
+import { BeRealRegistry_ABI } from "../lib/abis/BeRealRegistry";
 
 export async function initializeDistribution(
   signer: ethers.Signer,
   tokenAddress: string,
   totalAuctionSupply: bigint,
   auctionParams: AuctionParameters,
+  chainId?: number,
+  auctionSalt: string = ethers.ZeroHash,
 ) {
+  console.log(signer);
+  console.log(tokenAddress);
+  console.log(totalAuctionSupply);
+  console.log(auctionParams);
+  console.log(chainId);
+  console.log(auctionSalt);
+
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
   const encodedParams = abiCoder.encode(
@@ -30,46 +39,65 @@ export async function initializeDistribution(
     [auctionParams],
   );
 
-  const factory = new ethers.Contract(
-    CCA_FACTORY_ADDRESS,
-    ContinuousClearingAuctionFactory_ABI,
+  // Pre-approve registry to pull the tokens so initializeFull can fund + notify in a single tx
+  const erc20Abi = [
+    "function allowance(address owner, address spender) view returns (uint256)",
+    "function approve(address spender, uint256 amount) returns (bool)",
+  ];
+
+  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+  const sender = await signer.getAddress();
+
+  const currentAllowance = await tokenContract.allowance(
+    sender,
+    BE_REAL_REGISTRY_ADDRESS,
+  );
+
+  if (currentAllowance < totalAuctionSupply) {
+    const approveTx = await tokenContract.approve(
+      BE_REAL_REGISTRY_ADDRESS,
+      totalAuctionSupply,
+    );
+    await approveTx.wait();
+  }
+
+  const registry = new ethers.Contract(
+    BE_REAL_REGISTRY_ADDRESS,
+    BeRealRegistry_ABI,
     signer,
   );
 
-  const tx = await factory.initializeDistribution(
+  const tx = await registry.createAuctionWithApproval(
     tokenAddress,
     totalAuctionSupply,
     encodedParams,
-    ethers.ZeroHash,
-    {
-      gasLimit: BigInt(10_000_000),
-    },
+    auctionSalt,
+    { gasLimit: BigInt(12_000_000) },
   );
 
   const receipt = await tx.wait();
+  const iface = new ethers.Interface(BeRealRegistry_ABI);
 
-  // ⚠️ Prefer decoding events if ABI exposes them
-  const auctionAddress = receipt!.logs[0].address;
+  const auctionAddress = (() => {
+    for (const log of receipt?.logs ?? []) {
+      try {
+        const parsed = iface.parseLog(log);
+        if (parsed?.name === "AuctionRecorded") {
+          return parsed.args?.auction as string;
+        }
+      } catch (err) {
+        // skip non-registry logs
+      }
+    }
+    // Fallback: first log address if parsing fails
+    return receipt?.logs?.[0]?.address ?? "";
+  })();
 
-  const erc20Abi = [
-    "function balanceOf(address) view returns (uint256)",
-    "function decimals() view returns (uint8)",
-    "function symbol() view returns (string)",
-    "function transfer(address to, uint amount) returns (bool)",
-  ];
-
-  const auctionAbi = ["function onTokensReceived()"];
-  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
-  await tokenContract.transfer(auctionAddress, totalAuctionSupply);
-
-  const auctionContract = new ethers.Contract(
-    auctionAddress,
-    auctionAbi,
-    signer,
-  );
-  await auctionContract.onTokensReceived();
   return {
     txHash: receipt!.hash,
+    blockNumber: receipt!.blockNumber,
+    configData: encodedParams,
     auctionAddress,
+    chainId,
   };
 }

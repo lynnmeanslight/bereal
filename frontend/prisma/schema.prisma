@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Auction {
+  /// Auction contract address
+  id      String
+  chainId Int
+
+  token      String
+  amount     String // wei
+  configHash String
+  creator    String
+
+  startBlock BigInt
+  endBlock   BigInt
+  claimBlock BigInt
+
+  /// Event metadata
+  blockNumber BigInt
+  logIndex    Int
+  txHash      String
+
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  insertedAt DateTime @default(now())
+
+  /// Relations
+  rawConfig RawConfig?
+
+  @@id([id, chainId])
+  @@index([creator])
+  @@index([active])
+  @@index([chainId, blockNumber])
+}
+
+model RawConfig {
+  auctionId  String
+  chainId    Int
+  configData Bytes
+  createdAt  DateTime @default(now())
+  auction    Auction  @relation(fields: [auctionId, chainId], references: [id, chainId], onDelete: Cascade)
+
+  @@id([auctionId, chainId])
+}
+
+model BlockCursor {
+  /// Example: "unichain-sepolia-auction-indexer"
+  id      String @id
+  chainId Int
+
+  lastProcessedBlock BigInt
+  lastProcessedLog   Int
+
+  updatedAt DateTime @updatedAt
+
+  @@index([chainId])
+}
+
+model HumanVerification {
+  id String @id @default(uuid())
+
+  walletAddress String
+  nullifierHash String @unique
+  action        String
+  chainId       Int
+
+  verifiedAt DateTime @default(now())
+
+  @@index([walletAddress, action])
+  @@index([chainId])
+}

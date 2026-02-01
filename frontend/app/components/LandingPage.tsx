@@ -29,7 +29,7 @@ export function LandingPage({ onSelectRole }: { onSelectRole: (role: "creator" |
             </div>
             <div className="rounded-2xl border border-[color:var(--bereal-border)] bg-[color:var(--bereal-surface)] p-6 shadow-sm">
               <div className="text-4xl font-bold text-[color:var(--bereal-accent)]">1,247</div>
-              <div className="mt-2 text-sm text-[color:var(--bereal-text-secondary)]">Verified Humans</div>
+              <div className="mt-2 text-sm text-[color:var(--bereal-text-secondary)]">Human Verified</div>
             </div>
           </div>
 
@@ -129,7 +129,7 @@ export function LandingPage({ onSelectRole }: { onSelectRole: (role: "creator" |
                 <Globe className="h-6 w-6 text-[color:var(--bereal-accent)]" />
               </div>
               <h3 className="mb-2 text-lg font-bold text-[color:var(--bereal-text-primary)]">
-                World ID Verified
+                Human Verified
               </h3>
               <p className="text-sm text-[color:var(--bereal-text-secondary)]">
                 Optional bot protection ensures only Orb-verified humans can participate.

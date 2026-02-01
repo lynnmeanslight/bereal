@@ -1,34 +1,44 @@
+import { NextResponse } from "next/server";
 import { IVerifyResponse, verifyCloudProof } from "@worldcoin/idkit";
-import {} from "@worldcoin/idkit-core";
-import { NextApiRequest, NextApiResponse } from "next";
 
+// Pure verification endpoint: validates the proof with World ID and returns the result.
 export async function POST(request: Request) {
   try {
-    const proof = await request.json();
+    const body = await request.json();
+
     const app_id = process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}`;
-    const action = process.env.NEXT_PUBLIC_WORLD_APP_ACTION_ID as string;
-    console.log(app_id, action);
+    const envAction = process.env.NEXT_PUBLIC_WORLD_APP_ACTION_ID as string;
+
+    if (!app_id || !envAction) {
+      return NextResponse.json(
+        { error: "World ID env not configured" },
+        { status: 500 },
+      );
+    }
+
+
+    const action = body?.action || body?.action || envAction;
+    console.log("this is request body");
+    console.log(body);
+    
+    
+    
+
     const verifyRes = (await verifyCloudProof(
-      proof,
+      body,
       app_id,
       action,
     )) as IVerifyResponse;
+    console.log(verifyRes);
 
-    if (verifyRes.success) {
-      // This is where you should perform backend actions if the verification succeeds
-      // Such as, setting a user as "verified" in a database
-      return Response.json(verifyRes, { status: 200 });
-    } else {
-      // This is where you should handle errors from the World ID /verify endpoint.
-      // Usually these errors are due to a user having already verified.
-      console.log(verifyRes);
-
-      return Response.json(verifyRes, { status: 400 });
+    if (!verifyRes.success) {
+      return NextResponse.json(verifyRes, { status: 400 });
     }
-  } catch (reason) {
-    const message =
-      reason instanceof Error ? reason.message : "Unexpected error";
 
-    return new Response(message, { status: 500 });
+    return NextResponse.json(verifyRes, { status: 200 });
+  } catch (err: any) {
+    const message = err instanceof Error ? err.message : "Server error";
+    console.error("POST /api/verify error", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
