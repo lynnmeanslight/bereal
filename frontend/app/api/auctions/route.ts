@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma/client.js";
 import { createPublicClient, http } from "viem";
 import { unichainSepolia } from "viem/chains";
 import { PrismaPg } from "@prisma/adapter-pg";
