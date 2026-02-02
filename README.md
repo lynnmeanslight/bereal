@@ -8,6 +8,8 @@ BeReal is built by a **student Web3 developer based in Muaklek, Saraburi, Thaila
 
 **Portfolio:** https://nyilynnhtwe.xyz
 
+**Project site:** https://bereal.nyilynnhtwe.xyz
+
 ---
 
 ## What it does
@@ -82,6 +84,20 @@ Continuous Clearing Auctions encourage fair price discovery while reducing gas w
 - **Contracts:** Solidity (Foundry)
 - **DB / API:** Prisma + Postgres
 
+## Architecture
+- **Client (Next.js 16, React 19):** Wallet-connected UI with wagmi/viem + ethers v6 for reads/writes; World ID widget for optional Sybil resistance.
+- **Server-side (Next.js route handlers):** `/app/api/*` endpoints coordinate auction creation, token creation, bid submission, and distribution initialization. They call typed service helpers under `frontend/services` and `frontend/lib`.
+- **Data layer (Prisma + Postgres):** Persists auction metadata, token info, and verification state for faster UX; prisma client generated in `frontend/generated/prisma` using the schema in `prisma/schema.prisma`.
+- **Smart contracts (Foundry):** `BeRealRegistry` orchestrates auctions and token approvals; integrates with `ContinuousClearingAuctionFactory` and `USUPERC20Factory`; deployments tracked under `contract/broadcast`.
+- **Chain integrations:** Default network is Unichain Sepolia. RPC access uses the provided `ALCHEMY_API_KEY` (or any compatible RPC). World ID verification uses the configured `NEXT_PUBLIC_WORLD_APP_ACTION_ID`.
+
+### Request/Tx flow (high level)
+1. User connects a wallet in the client, configures token + auction params, and optionally completes World ID verification.
+2. The app prepares typed calldata using abis in `frontend/lib/abis`, then submits transactions via wagmi/ethers to the registry + factories.
+3. Contracts deploy or re-use ERC20 tokens, deploy the auction contract, escrow the auction supply, and register metadata on-chain.
+4. Prisma indexes on-chain state (via scripts/indexer.ts) to hydrate the UI with auction lists and details.
+5. Bidders place max-price bids; clearing and refunds settle per the Continuous Clearing Auction mechanics.
+
 ---
 
 ## Repository layout
@@ -90,25 +106,52 @@ Continuous Clearing Auctions encourage fair price discovery while reducing gas w
 
 ---
 
-## Local development
+## Build & run
+
+**Prerequisites**
+- Node.js 20+ and npm
+- Foundry toolchain (`curl -L https://foundry.paradigm.xyz | bash`, then `foundryup`)
+- Postgres database (local or hosted) for Prisma
+
+**Frontend (Next.js)**
 ```bash
 cd frontend
 npm install
-npm run dev
-
+npm run dev            # start Next.js dev server
+# npm run build && npm start  # production build + serve
 ```
 
-## Environment variables
-
-Create frontend/.env.local with:
+Create `frontend/.env.local`:
 ```bash
-NEXT_PUBLIC_WORLD_APP_ACTION_ID
+NEXT_PUBLIC_WORLD_APP_ACTION_ID=<world_id_action_id>
+DATABASE_URL=<postgres_connection_string>
+CHAIN_ID=1301                        # Unichain Sepolia
+ALCHEMY_API_KEY=<alchemy_key_or_empty>
+```
 
-DATABASE_URL
+**Prisma / database**
+```bash
+cd frontend
+npx prisma generate
+# Apply migrations from the repo root prisma/ folder if needed:
+cd .. && npx prisma migrate deploy --schema prisma/schema.prisma
+```
 
-CHAIN_ID
+**Contracts (Foundry)**
+```bash
+cd contract
+forge install          # first time, to pull libs
+forge build
+forge test
+```
 
-ALCHEMY_API_KEY (optional)
+For deployment scripts (example):
+```bash
+forge script script/BeRealRegistry.s.sol \
+   --rpc-url $RPC_URL \
+   --private-key $PRIVATE_KEY \
+   --broadcast \
+   --verify
 ```
 
 ## Usage notes
@@ -135,3 +178,13 @@ https://sepolia.uniscan.xyz/address/0xCCccCcCAE7503Cac057829BF2811De42E16e0bD5
 > **Note:** At the time of development, there was **no official Continuous Clearing Auction (CCA) factory deployed on Unichain Sepolia**.  
 > To unblock development and enable real testing, I **deployed the CCA factory myself** and submitted a **pull request to the Uniswap repository** to support Unichain Sepolia.  
 > This project therefore includes both application-level work *and* ecosystem-level contributions.
+
+---
+
+## Demo
+- Video: [Youtube](https://youtu.be/_7Gv2y5GpdE?si=wcuRQqOnFo0XRfKu)
+
+## Useful links
+- App: https://bereal.nyilynnhtwe.xyz
+- Portfolio: https://nyilynnhtwe.xyz
+- Contracts on Unichain Sepolia: see addresses above
